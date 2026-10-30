@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- Stage 1: build the React frontend ----
-FROM node:22-alpine AS web-build
+FROM node:25-alpine AS web-build
 WORKDIR /web
 COPY frontend/package*.json ./
 RUN npm ci
