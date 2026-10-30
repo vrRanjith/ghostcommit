@@ -1,0 +1,3 @@
+# Always use LF line endings, even on Windows checkouts: Docker builds and Linux hosts
+# (Render) can break on CRLF.
+* text=auto eol=lf

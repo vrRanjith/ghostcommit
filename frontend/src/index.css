@@ -1,0 +1,339 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+    /* The ghost speaks in serif; the app UI stays sans. */
+    --font-serif: "Cormorant Garamond", Georgia, serif;
+    --color-candle: var(--candle);
+
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+}
+
+/* Séance palette: dark-only. Near-black with a violet cast, a ghostly violet glow
+   for actions, and a warm candle amber for "time has passed" highlights. */
+:root {
+    --radius: 0.75rem;
+    --background: oklch(0.14 0.018 290);
+    --foreground: oklch(0.93 0.012 290);
+    --card: oklch(0.18 0.022 290);
+    --card-foreground: oklch(0.93 0.012 290);
+    --popover: oklch(0.19 0.024 290);
+    --popover-foreground: oklch(0.93 0.012 290);
+    --primary: oklch(0.74 0.14 292);
+    --primary-foreground: oklch(0.16 0.03 290);
+    --secondary: oklch(0.24 0.028 290);
+    --secondary-foreground: oklch(0.93 0.012 290);
+    --muted: oklch(0.22 0.022 290);
+    --muted-foreground: oklch(0.7 0.03 290);
+    --accent: oklch(0.27 0.045 292);
+    --accent-foreground: oklch(0.95 0.012 290);
+    --destructive: oklch(0.66 0.19 25);
+    --border: oklch(1 0 0 / 9%);
+    --input: oklch(1 0 0 / 13%);
+    --ring: oklch(0.74 0.14 292);
+    --candle: oklch(0.83 0.13 75);
+    color-scheme: dark;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    /* Quiet scrollbars: thin, no arrow buttons, tinted to the room. */
+    scrollbar-width: thin;
+    scrollbar-color: oklch(1 0 0 / 14%) transparent;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    min-height: 100vh;
+  }
+}
+
+/* ---- Ambient atmosphere (every page). Only transform/opacity animate: GPU-cheap. ---- */
+
+/* Irregular steps read as a candle, not a pulse. */
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  7% { opacity: 0.82; }
+  9% { opacity: 0.96; }
+  31% { opacity: 0.9; }
+  33% { opacity: 0.72; }
+  35% { opacity: 0.94; }
+  62% { opacity: 1; }
+  66% { opacity: 0.86; }
+  84% { opacity: 0.97; }
+}
+@keyframes fog-drift {
+  from { transform: translateX(0); }
+  to { transform: translateX(40vw); }
+}
+@keyframes mote-rise {
+  0% { transform: translate(0, 0); opacity: 0; }
+  10% { opacity: var(--o); }
+  50% { transform: translate(var(--sway), -50vh); }
+  85% { opacity: var(--o); }
+  100% { transform: translate(0, -105vh); opacity: 0; }
+}
+@keyframes smoke-rise {
+  0% { transform: translateY(4px) scaleX(1); opacity: 0; }
+  30% { opacity: 0.55; }
+  100% { transform: translateY(-10px) scaleX(1.35); opacity: 0; }
+}
+/* Banish dialog: the ghost trembles, then dissolves upward when banished. */
+@keyframes tremble {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  20% { transform: translate(-1.5px, 0.5px) rotate(-2deg); }
+  40% { transform: translate(1.5px, -0.5px) rotate(2deg); }
+  60% { transform: translate(-1px, -0.5px) rotate(-1deg); }
+  80% { transform: translate(1px, 0.5px) rotate(1deg); }
+}
+@keyframes banish {
+  0% { transform: translateY(0) scale(1) rotate(0); opacity: 1; filter: blur(0); }
+  35% { transform: translateY(-6px) scale(1.12) rotate(-6deg); opacity: 1; filter: blur(0); }
+  100% { transform: translateY(-60px) scale(0.5) rotate(25deg); opacity: 0; filter: blur(10px); }
+}
+@keyframes wander {
+  0% { transform: translateX(-15vw); opacity: 0; }
+  6%, 40% { opacity: 0.06; }
+  46%, 100% { transform: translateX(110vw); opacity: 0; }
+}
+
+@layer components {
+  .atmosphere {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .candle-glow {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 80% 50% at 50% -10%, oklch(0.74 0.14 292 / 15%), transparent);
+    will-change: opacity;
+    animation: flicker 7s linear infinite;
+  }
+  .fog {
+    position: absolute;
+    bottom: -12vh;
+    left: -50vw;
+    width: 200vw;
+    height: 45vh;
+    background:
+      radial-gradient(ellipse 30% 60% at 25% 60%, oklch(0.82 0.03 290 / 9%), transparent),
+      radial-gradient(ellipse 25% 50% at 65% 50%, oklch(0.82 0.03 290 / 7%), transparent),
+      radial-gradient(ellipse 30% 55% at 90% 65%, oklch(0.82 0.03 290 / 8%), transparent);
+    filter: blur(30px);
+    will-change: transform;
+    animation: fog-drift 70s ease-in-out infinite alternate;
+  }
+  .fog-2 {
+    bottom: -18vh;
+    height: 35vh;
+    opacity: 0.8;
+    animation-duration: 50s;
+    animation-direction: alternate-reverse;
+  }
+  .mote {
+    position: absolute;
+    bottom: -10px;
+    left: var(--x);
+    width: var(--s);
+    height: var(--s);
+    border-radius: 9999px;
+    background: oklch(0.88 0.08 292);
+    box-shadow: 0 0 8px 2px oklch(0.74 0.14 292 / 55%);
+    opacity: 0;
+    will-change: transform, opacity;
+    animation: mote-rise var(--dur) linear var(--delay) infinite;
+  }
+  /* A barely-there ghost crossing the background every ~40s: easy to miss, on purpose. */
+  .wanderer {
+    position: absolute;
+    top: 38vh;
+    left: 0;
+    font-size: 90px;
+    filter: blur(2px);
+    opacity: 0;
+    will-change: transform, opacity;
+    animation: wander 40s linear 4s infinite;
+  }
+  .wanderer-bob {
+    display: inline-block;
+    --amp: 3vh;
+    animation: ghost-bob 3.5s ease-in-out infinite alternate;
+  }
+  .animate-tremble {
+    display: inline-block;
+    animation: tremble 0.6s ease-in-out infinite;
+  }
+  .animate-banish {
+    display: inline-block;
+    animation: banish 0.9s ease-in forwards;
+  }
+  .candle-smoke {
+    /* scale/translate around the smoke's own base, not the SVG's origin */
+    transform-box: fill-box;
+    transform-origin: bottom center;
+    will-change: transform, opacity;
+    animation: smoke-rise 3.2s ease-out infinite;
+  }
+  .vignette {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 55%, oklch(0.07 0.02 290 / 75%) 100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .candle-glow, .fog, .wanderer-bob { animation: none; }
+  .candle-smoke { animation: none; opacity: 0.35; }
+  .animate-tremble { animation: none; }
+  .mote, .wanderer { display: none; }
+  .animate-float, .haunting-ghost, .animate-blown-in { animation: none; opacity: 1; }
+  .haunting-ghost { opacity: 0.8; }
+  .wind-line, .wind-mist, .wind-ghost { display: none; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+/* Unread hauntings: little ghosts drift around the nav item, fading in and out.
+   Each ghost sets --dx/--dy (drift) and its own delay so they never move in sync. */
+@keyframes haunt {
+  0%, 100% { transform: translate(0, 0) rotate(-8deg); opacity: 0; }
+  20%, 80% { opacity: 0.9; }
+  50% { transform: translate(var(--dx), var(--dy)) rotate(8deg); }
+}
+
+/* Hauntings page: a gust of spectral wind sweeps across once, carrying ghosts and the cards in. */
+
+/* A short dash travels along each curved wisp (pathLength=1000), so the wind flows and curls
+   instead of the whole line sliding sideways. */
+@keyframes wind-draw {
+  0% { stroke-dashoffset: 260; opacity: 0; }
+  15%, 80% { opacity: var(--o); }
+  100% { stroke-dashoffset: -1000; opacity: 0; }
+}
+
+@keyframes mist-drift {
+  0% { transform: translateX(-70vw); opacity: 0; }
+  30%, 60% { opacity: 1; }
+  100% { transform: translateX(120vw); opacity: 0; }
+}
+
+/* Ghost flight = three nested, continuous motions (never a multi-waypoint path, which
+   eases to a near-stop at every waypoint): drift across at constant speed, bob up/down,
+   and tumble. Combined they make a smooth wavy flight. */
+@keyframes ghost-drift {
+  0% { transform: translateX(-12vw); opacity: 0; }
+  12%, 82% { opacity: var(--o); }
+  100% { transform: translateX(112vw); opacity: 0; }
+}
+@keyframes ghost-bob {
+  from { transform: translateY(calc(var(--amp) * -1)); }
+  to { transform: translateY(var(--amp)); }
+}
+@keyframes ghost-tumble {
+  from { transform: rotate(-14deg) scale(0.92); }
+  to { transform: rotate(14deg) scale(1.06); }
+}
+
+@keyframes blown-in {
+  0% { transform: translateX(-40px) rotate(-1.5deg); opacity: 0; filter: blur(3px); }
+  70% { transform: translateX(4px) rotate(0.3deg); opacity: 1; filter: blur(0); }
+  100% { transform: none; opacity: 1; }
+}
+
+@layer components {
+  .wind-line {
+    fill: none;
+    /* No filter here: a glow on an animating stroke is repainted every frame. */
+    stroke: oklch(0.9 0.07 290 / 65%);
+    stroke-linecap: round;
+    stroke-dasharray: 260 1000;
+    stroke-dashoffset: 260;
+    vector-effect: non-scaling-stroke; /* keep strokes thin even though the SVG is stretched */
+    opacity: 0;
+    animation: wind-draw var(--dur) cubic-bezier(0.4, 0, 0.3, 1) var(--delay) forwards;
+  }
+  .wind-mist {
+    position: absolute;
+    top: 20vh;
+    left: 0;
+    width: 70vw;
+    height: 60vh;
+    border-radius: 50%;
+    background: radial-gradient(ellipse, oklch(0.74 0.14 292 / 10%), transparent 70%);
+    filter: blur(20px);
+    opacity: 0;
+    will-change: transform, opacity;
+    animation: mist-drift 3s ease-in-out forwards;
+  }
+  /* will-change: each layer gets its own GPU layer, so the glow is painted once and only moved. */
+  .wind-ghost {
+    position: absolute;
+    top: var(--y);
+    left: 0;
+    opacity: 0;
+    will-change: transform, opacity;
+    animation: ghost-drift var(--dur) linear var(--delay) forwards;
+  }
+  .wind-ghost-bob {
+    display: inline-block;
+    will-change: transform;
+    animation: ghost-bob var(--bob) ease-in-out infinite alternate;
+  }
+  .wind-ghost-tumble {
+    display: inline-block;
+    will-change: transform;
+    filter: drop-shadow(0 0 10px oklch(0.74 0.14 292 / 80%));
+    animation: ghost-tumble var(--tumble) ease-in-out infinite alternate;
+  }
+  .animate-blown-in {
+    opacity: 0;
+    animation: blown-in 0.9s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
+  }
+  .animate-float {
+    animation: float 5s ease-in-out infinite;
+  }
+  .haunting-ghost {
+    position: absolute;
+    pointer-events: none; /* never block clicks on the tab underneath */
+    font-size: 13px;
+    animation: haunt 4.5s ease-in-out infinite;
+    filter: drop-shadow(0 0 6px oklch(0.74 0.14 292 / 70%));
+  }
+  .ghost-voice {
+    @apply font-serif text-lg leading-relaxed;
+    text-shadow: 0 0 18px oklch(0.74 0.14 292 / 35%);
+  }
+}

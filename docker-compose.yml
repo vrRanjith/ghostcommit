@@ -1,0 +1,80 @@
+# Local development only. All ports bind to 127.0.0.1 so nothing (e.g. the weak dev DB
+# password) is reachable from other machines on the same network.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ghost
+      POSTGRES_PASSWORD: ghost
+      POSTGRES_DB: ghostcommit
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ghost -d ghostcommit"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      target: dev
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ghost:ghost@db:5432/ghostcommit
+      SMTP_HOST: mailpit
+    volumes:
+      - ./backend:/app
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Runs once and exits, like the Render Cron Job. Not started by `up`:
+  #   docker compose run --rm haunter            (add --force to skip the cooldown)
+  haunter:
+    build:
+      context: .
+      target: dev
+    entrypoint: ["python", "-m", "app.haunter"]
+    command: []
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ghost:ghost@db:5432/ghostcommit
+      SMTP_HOST: mailpit
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles: ["jobs"]
+
+  web:
+    image: node:22-alpine
+    working_dir: /web
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    environment:
+      API_URL: http://api:8000
+      WATCH_POLLING: "1"
+    volumes:
+      - ./frontend:/web
+      # Keep Linux node_modules inside the container, separate from the Windows copy.
+      - web_node_modules:/web/node_modules
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      - api
+
+  # Catches outgoing email locally. Inbox UI: http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+
+volumes:
+  pgdata:
+  web_node_modules:
