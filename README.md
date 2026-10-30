@@ -69,3 +69,10 @@ cd frontend && npm test                     # frontend unit tests
 Accepted risk: commit contents and READMEs reach the model, so a malicious repo could steer the
 ghost's wording (prompt injection). Output is always rendered as escaped text and only shown to
 the repo's owner.
+
+Found a vulnerability? Please report it privately; see [SECURITY.md](SECURITY.md).
+
+## License
+
+[GNU AGPL-3.0](LICENSE). You may use, modify and share GhostCommit, but if you run a modified
+version as a service, you must publish your source under the same license.
