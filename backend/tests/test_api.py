@@ -5,8 +5,10 @@ Most tests here play an attacker and assert the attack fails.
 
 from urllib.parse import parse_qs, urlsplit
 
+import pytest
 from sqlalchemy import func, select
 
+from app.config import get_settings
 from app.db import SessionLocal
 from app.models import ChatMessage, Haunting, ParkingNote, Repo, User
 from app.security import decrypt
@@ -280,6 +282,60 @@ async def test_failed_chat_saves_nothing(client, fake_bb):
     assert (await client.post(f"/api/repos/{repo.id}/chat", json={"message": "hi"}, headers=JSON)).status_code == 502
     async with SessionLocal() as s:
         assert await s.scalar(select(func.count()).select_from(ChatMessage)) == 0
+
+
+# ---------- scheduled haunting trigger ----------
+
+HAUNT_SECRET = "h" * 40
+
+
+@pytest.fixture
+def haunter_spy(monkeypatch):
+    calls = []
+
+    async def fake_run(force):
+        calls.append(force)
+        return {"checked": 2, "haunted": 1}
+
+    monkeypatch.setattr("app.haunter.run", fake_run)
+    return calls
+
+
+async def test_haunt_trigger_is_disabled_without_a_secret(client, haunter_spy, monkeypatch):
+    monkeypatch.setattr(get_settings(), "haunt_secret", "")
+    r = await client.post("/internal/haunt", headers={"Authorization": "Bearer "})
+    assert r.status_code == 404
+    assert haunter_spy == []
+
+
+async def test_haunt_trigger_rejects_missing_or_wrong_token(client, haunter_spy, monkeypatch):
+    monkeypatch.setattr(get_settings(), "haunt_secret", HAUNT_SECRET)
+    for headers in [{}, {"Authorization": "Bearer wrong"}, {"Authorization": HAUNT_SECRET}]:
+        assert (await client.post("/internal/haunt", headers=headers)).status_code == 401
+    assert haunter_spy == []
+
+
+async def test_haunt_trigger_runs_with_the_right_token(client, haunter_spy, monkeypatch):
+    monkeypatch.setattr(get_settings(), "haunt_secret", HAUNT_SECRET)
+    r = await client.post("/internal/haunt", headers={"Authorization": f"Bearer {HAUNT_SECRET}"})
+    assert r.status_code == 200
+    assert r.json() == {"checked": 2, "haunted": 1}
+    assert haunter_spy == [False]  # never forced: the cooldown still applies
+
+
+async def test_haunt_trigger_is_rate_limited(client, haunter_spy, monkeypatch):
+    monkeypatch.setattr(get_settings(), "haunt_secret", HAUNT_SECRET)
+    auth = {"Authorization": f"Bearer {HAUNT_SECRET}"}
+    for _ in range(5):
+        assert (await client.post("/internal/haunt", headers=auth)).status_code == 200
+    assert (await client.post("/internal/haunt", headers=auth)).status_code == 429
+
+
+async def test_haunter_never_runs_twice_at_once():
+    from app import haunter
+
+    async with haunter._running:  # simulate a run already in progress
+        assert await haunter.run(force=False) == {"checked": 0, "haunted": 0, "skipped_busy": 1}
 
 
 # ---------- core behaviour ----------

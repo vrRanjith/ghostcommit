@@ -1,6 +1,7 @@
 """Daily job: find stalled repos and let their ghosts haunt the developer.
 
-Runs once and exits (Render Cron Job). Locally: docker compose run --rm haunter [--force]
+In production a scheduled GitHub Actions workflow calls POST /internal/haunt, which runs this.
+Locally, run it directly: docker compose run --rm haunter [--force]
 """
 
 import argparse
@@ -75,9 +76,22 @@ async def haunt_repo(repo: Repo, bb: BackboardClient, now: datetime, force: bool
     return haunting
 
 
-async def run(force: bool) -> None:
+_running = asyncio.Lock()
+
+
+async def run(force: bool) -> dict[str, int]:
+    """Check every tracked repo once. Returns a summary. Never runs twice at the same time."""
+    if _running.locked():
+        log.info("haunter already running; skipping this trigger")
+        return {"checked": 0, "haunted": 0, "skipped_busy": 1}
+    async with _running:
+        return await _run(force)
+
+
+async def _run(force: bool) -> dict[str, int]:
     await init_db()
     now = datetime.now(timezone.utc)
+    summary = {"checked": 0, "haunted": 0}
     bb = BackboardClient()
     async with SessionLocal() as session:
         repos = (await session.scalars(select(Repo).options(selectinload(Repo.user)))).all()
@@ -86,10 +100,12 @@ async def run(force: bool) -> None:
             # Read before anything can fail: after rollback() the ORM object is expired, and
             # touching its attributes would trigger lazy IO, which async SQLAlchemy forbids.
             name = repo.full_name
+            summary["checked"] += 1
             try:
                 haunting = await haunt_repo(repo, bb, now, force)
                 if haunting:
                     session.add(haunting)
+                    summary["haunted"] += 1
                     log.info("haunted %s (emailed=%s)", name, haunting.emailed)
                 await session.commit()
             except Exception as e:
@@ -100,6 +116,7 @@ async def run(force: bool) -> None:
                 else:
                     log.exception("failed on %s", name)
     await bb.aclose()
+    return summary
 
 
 if __name__ == "__main__":

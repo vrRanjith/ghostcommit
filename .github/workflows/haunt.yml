@@ -1,0 +1,24 @@
+name: Daily haunting
+
+on:
+  schedule:
+    - cron: "30 3 * * *" # 03:30 UTC = 09:00 IST
+  workflow_dispatch: # "Run workflow" button, handy for demos
+
+# This job only makes an HTTPS call; it needs no access to the repo at all.
+permissions: {}
+
+jobs:
+  haunt:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger the haunter
+        # Secret passed via env (not inlined into the script) so it can't be injected or echoed.
+        env:
+          HAUNT_SECRET: ${{ secrets.HAUNT_SECRET }}
+        # Retries also cover the free web service waking from sleep.
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --max-time 600 --retry 3 --retry-delay 30 --retry-all-errors \
+            -X POST -H "Authorization: Bearer $HAUNT_SECRET" \
+            https://ghost.buildloop.tech/internal/haunt

@@ -36,7 +36,8 @@ GitHub commits ──▶ summarize (open-weight LLM) ──▶ one memory per sy
 | AI memory | Backboard (memory + threads), Gemma 4 31B (open-weight) via OpenRouter |
 | Auth | GitHub OAuth |
 | Email | Resend (production), Mailpit (local) |
-| Hosting | Render: web service, cron job, PostgreSQL |
+| Hosting | Render: web service + PostgreSQL (Blueprint in `render.yaml`) |
+| Scheduling | GitHub Actions calls a token-protected `/internal/haunt` daily |
 
 ## Run locally
 

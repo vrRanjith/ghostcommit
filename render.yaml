@@ -1,11 +1,15 @@
 # Render Blueprint: the whole production setup as code.
 # Secrets use `sync: false`, so Render asks for them in its dashboard; they never live in git.
+#
+# Free plans (no card needed). The daily haunter is triggered by .github/workflows/haunt.yml
+# calling POST /internal/haunt, because Render has no free cron jobs. To move to paid plans,
+# change `plan:` below and optionally add a `type: cron` service running `python -m app.haunter`.
 
 databases:
   - name: ghostcommit-db
     databaseName: ghostcommit
     user: ghost
-    plan: basic-256mb
+    plan: free
     region: singapore
     postgresMajorVersion: "16"
     # No public access: only services on this Render account's private network can connect.
@@ -15,7 +19,7 @@ services:
   - type: web
     name: ghostcommit
     runtime: docker
-    plan: starter
+    plan: free
     region: singapore
     dockerfilePath: ./Dockerfile
     dockerContext: .
@@ -49,38 +53,6 @@ services:
         sync: false
       - key: EMAIL_FROM
         value: GhostCommit <ghost@buildloop.tech>
-
-  # The haunter: same image, runs once a day and exits. 03:30 UTC = 09:00 IST.
-  - type: cron
-    name: ghostcommit-haunter
-    runtime: docker
-    plan: starter
-    region: singapore
-    schedule: "30 3 * * *"
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    dockerCommand: python -m app.haunter
-    autoDeployTrigger: checksPass
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: ghostcommit-db
-          property: connectionString
-      - key: APP_URL
-        value: https://ghost.buildloop.tech
-      # Required by settings validation; the haunter never issues cookies.
-      - key: SESSION_SECRET
-        generateValue: true
-      # Must be the SAME value as the web service's, or stored GitHub tokens can't be decrypted.
-      - key: TOKEN_ENCRYPTION_KEY
+      # Bearer token the scheduled workflow sends; must match the GitHub Actions secret.
+      - key: HAUNT_SECRET
         sync: false
-      - key: BACKBOARD_API_KEY
-        sync: false
-      - key: LLM_PROVIDER
-        value: openrouter
-      - key: MODEL_NAME
-        value: google/gemma-4-31b-it
-      - key: RESEND_API_KEY
-        sync: false
-      - key: EMAIL_FROM
-        value: GhostCommit <ghost@buildloop.tech>

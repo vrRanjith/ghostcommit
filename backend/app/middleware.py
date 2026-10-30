@@ -67,6 +67,6 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         h["Content-Security-Policy"] = CSP
         if self.https:
             h["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        if request.url.path.startswith(("/api", "/auth")):
+        if request.url.path.startswith(("/api", "/auth", "/internal")):
             h["Cache-Control"] = "no-store"  # personal data must never sit in shared caches
         return response

@@ -36,6 +36,13 @@ def test_short_session_secret_is_rejected():
         Settings(database_url="sqlite+aiosqlite://", session_secret="short", token_encryption_key="k")
 
 
+def test_short_haunt_secret_is_rejected_but_empty_disables():
+    base = {"database_url": "sqlite+aiosqlite://", "session_secret": "s" * 32, "token_encryption_key": "k"}
+    with pytest.raises(ValidationError):
+        Settings(**base, haunt_secret="short")
+    assert Settings(**base, haunt_secret="").haunt_secret == ""
+
+
 @pytest.mark.parametrize("url", ["postgres://u:p@h/db", "postgresql://u:p@h/db"])
 def test_render_database_url_gets_asyncpg_driver(url):
     s = Settings(database_url=url, session_secret="s" * 32, token_encryption_key="k")

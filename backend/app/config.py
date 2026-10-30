@@ -32,12 +32,22 @@ class Settings(BaseSettings):
 
     stall_days: int = 7
 
+    # Bearer token for POST /internal/haunt (the scheduled trigger). Empty = endpoint disabled.
+    haunt_secret: str = ""
+
     @field_validator("session_secret")
     @classmethod
     def strong_session_secret(cls, v: str) -> str:
         # A short secret lets attackers brute-force cookie signatures and forge sessions.
         if len(v) < 32:
             raise ValueError("SESSION_SECRET must be at least 32 characters")
+        return v
+
+    @field_validator("haunt_secret")
+    @classmethod
+    def strong_haunt_secret(cls, v: str) -> str:
+        if v and len(v) < 32:
+            raise ValueError("HAUNT_SECRET must be at least 32 characters (or empty to disable)")
         return v
 
     @field_validator("database_url")
