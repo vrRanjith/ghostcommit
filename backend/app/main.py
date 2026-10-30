@@ -12,7 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.config import get_settings
 from app.db import get_session, init_db
 from app.middleware import SecurityMiddleware
-from app.routers import auth, ghost, hauntings, repos
+from app.routers import auth, ghost, hauntings, internal, repos
 from app.services.backboard import BackboardError
 from app.services.github import GitHubError
 
@@ -65,6 +65,7 @@ app.include_router(auth.router)
 app.include_router(repos.router)
 app.include_router(ghost.router)
 app.include_router(hauntings.router)
+app.include_router(internal.router)
 
 
 @app.get("/api/health")

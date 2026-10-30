@@ -68,5 +68,6 @@ summon_limit = per_user(20, 3600)
 write_limit = per_user(30, 60)  # settings, banish, mark-read
 github_list_limit = per_user(30, 60)
 auth_limit = per_ip(20, 60)
+haunt_limit = per_ip(5, 3600)  # the scheduler calls once a day; anything more is abuse
 
-ALL_LIMITS = [chat_limit, sync_limit, note_limit, summon_limit, write_limit, github_list_limit, auth_limit]
+ALL_LIMITS = [chat_limit, sync_limit, note_limit, summon_limit, write_limit, github_list_limit, auth_limit, haunt_limit]
