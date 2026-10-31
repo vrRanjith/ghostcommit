@@ -284,6 +284,58 @@ async def test_failed_chat_saves_nothing(client, fake_bb):
         assert await s.scalar(select(func.count()).select_from(ChatMessage)) == 0
 
 
+# ---------- dismissing hauntings ----------
+
+async def _haunting(repo, message="boo") -> int:
+    async with SessionLocal() as s:
+        h = Haunting(repo_id=repo.id, message=message)
+        s.add(h)
+        await s.commit()
+        return h.id
+
+
+async def test_dismiss_one_haunting_keeps_the_cooldown(client):
+    user = await make_user()
+    repo = await make_repo(user)
+    async with SessionLocal() as s:
+        r = await s.get(Repo, repo.id)
+        r.last_haunted_at = r.created_at
+        await s.commit()
+    keep, gone = await _haunting(repo, "keep"), await _haunting(repo, "gone")
+    login_as(client, user.id)
+
+    assert (await client.delete(f"/api/hauntings/{gone}", headers=JSON)).status_code == 204
+
+    assert [h["id"] for h in (await client.get("/api/hauntings")).json()] == [keep]
+    async with SessionLocal() as s:
+        assert (await s.get(Repo, repo.id)).last_haunted_at is not None  # no immediate re-haunt
+
+
+async def test_dismiss_all_only_clears_your_own(client):
+    alice, bob = await make_user(1, "alice"), await make_user(2, "bob")
+    alices_repo, bobs_repo = await make_repo(alice), await make_repo(bob, github_id=200)
+    await _haunting(alices_repo)
+    await _haunting(alices_repo)
+    bobs = await _haunting(bobs_repo)
+    login_as(client, alice.id)
+
+    assert (await client.delete("/api/hauntings", headers=JSON)).status_code == 204
+
+    assert (await client.get("/api/hauntings")).json() == []
+    async with SessionLocal() as s:
+        assert await s.get(Haunting, bobs) is not None
+
+
+async def test_cannot_dismiss_someone_elses_haunting(client):
+    alice, bob = await make_user(1, "alice"), await make_user(2, "bob")
+    hid = await _haunting(await make_repo(alice))
+    login_as(client, bob.id)
+    assert (await client.delete(f"/api/hauntings/{hid}", headers=JSON)).status_code == 404
+    assert (await client.delete(f"/api/hauntings/{hid}", headers={"Origin": "https://evil.example"})).status_code == 403
+    async with SessionLocal() as s:
+        assert await s.get(Haunting, hid) is not None
+
+
 # ---------- scheduled haunting trigger ----------
 
 HAUNT_SECRET = "h" * 40

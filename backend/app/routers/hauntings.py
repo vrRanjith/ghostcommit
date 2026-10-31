@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
@@ -45,4 +45,28 @@ async def mark_read(
     if haunting is None:
         raise HTTPException(status_code=404, detail="Haunting not found")
     haunting.read_at = datetime.now(timezone.utc)
+    await session.commit()
+
+
+# Deleting removes feed entries only. The repo's last_haunted_at (the cooldown) is untouched,
+# so clearing the feed never causes an immediate re-haunt.
+
+
+@router.delete("/{haunting_id}", status_code=204, dependencies=[Depends(write_limit)])
+async def dismiss(
+    haunting_id: int, user: User = Depends(current_user), session: AsyncSession = Depends(get_session)
+) -> None:
+    haunting = await session.scalar(
+        select(Haunting).join(Repo).where(Haunting.id == haunting_id, Repo.user_id == user.id)
+    )
+    if haunting is None:
+        raise HTTPException(status_code=404, detail="Haunting not found")
+    await session.delete(haunting)
+    await session.commit()
+
+
+@router.delete("", status_code=204, dependencies=[Depends(write_limit)])
+async def dismiss_all(user: User = Depends(current_user), session: AsyncSession = Depends(get_session)) -> None:
+    owned_repo_ids = select(Repo.id).where(Repo.user_id == user.id)
+    await session.execute(delete(Haunting).where(Haunting.repo_id.in_(owned_repo_ids)))
     await session.commit()
