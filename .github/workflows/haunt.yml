@@ -17,8 +17,11 @@ jobs:
         env:
           HAUNT_SECRET: ${{ secrets.HAUNT_SECRET }}
         # Retries also cover the free web service waking from sleep.
+        # Logs are public on a public repo: print only the HTTP status and discard the body
+        # (it contains usage numbers). Details stay in the private Render logs.
         run: |
-          curl --fail-with-body --silent --show-error \
+          curl --fail --silent --show-error \
             --max-time 600 --retry 3 --retry-delay 30 --retry-all-errors \
+            --output /dev/null --write-out "HTTP %{http_code}\n" \
             -X POST -H "Authorization: Bearer $HAUNT_SECRET" \
             https://ghost.buildloop.tech/internal/haunt
