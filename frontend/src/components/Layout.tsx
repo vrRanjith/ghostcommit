@@ -1,6 +1,7 @@
 import { LogOut } from 'lucide-react'
-import { useEffect, useState, type CSSProperties } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
+import { toast } from 'sonner'
 
 import { SettingsDialog } from '@/components/SettingsDialog'
 import { Badge } from '@/components/ui/badge'
@@ -9,6 +10,8 @@ import { api, HAUNTINGS_CHANGED_EVENT, RECONNECT_EVENT, type Haunting, type Me }
 import { cn } from '@/lib/utils'
 
 type Props = { me: Me; onMeChange: (me: Me) => void; onLogout: () => void }
+
+const POLL_MS = 60_000
 
 // Where each ghost starts, which way it drifts, and when: staggered so they never sync up.
 // CSSProperties doesn't know custom properties, so also allow any `--name` key.
@@ -21,17 +24,39 @@ const HOVERING_GHOSTS: (CSSProperties & Record<`--${string}`, string>)[] = [
 export function Layout({ me, onMeChange, onLogout }: Props) {
   const [unread, setUnread] = useState(0)
   const [reconnect, setReconnect] = useState(false)
+  const lastUnread = useRef<number | null>(null)
   const location = useLocation()
+  const navigate = useNavigate()
 
   useEffect(() => {
     const refresh = () =>
       api<Haunting[]>('/api/hauntings')
-        .then((hs) => setUnread(hs.filter((h) => !h.read).length))
+        .then((hs) => {
+          const count = hs.filter((h) => !h.read).length
+          // Announce hauntings that arrived while the page was open (not the ones present on load).
+          if (lastUnread.current !== null && count > lastUnread.current) {
+            toast('👻 A ghost has come for you', {
+              description: 'One of your abandoned projects is calling.',
+              action: { label: 'View', onClick: () => navigate('/hauntings') },
+            })
+          }
+          lastUnread.current = count
+          setUnread(count)
+        })
         .catch(() => {})
+    // Hauntings are written by the daily job, not by this page, so look again periodically and
+    // when the user comes back to the tab. Hidden tabs don't poll.
+    const refreshIfVisible = () => document.visibilityState === 'visible' && refresh()
     refresh()
+    const timer = setInterval(refreshIfVisible, POLL_MS)
+    document.addEventListener('visibilitychange', refreshIfVisible)
     window.addEventListener(HAUNTINGS_CHANGED_EVENT, refresh)
-    return () => window.removeEventListener(HAUNTINGS_CHANGED_EVENT, refresh)
-  }, [location.pathname])
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', refreshIfVisible)
+      window.removeEventListener(HAUNTINGS_CHANGED_EVENT, refresh)
+    }
+  }, [location.pathname, navigate])
 
   useEffect(() => {
     const show = () => setReconnect(true)
