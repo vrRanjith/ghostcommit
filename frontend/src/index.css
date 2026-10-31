@@ -273,7 +273,15 @@
   100% { transform: none; opacity: 1; }
 }
 
+/* A dismissed haunting drifts off and dissolves. */
+@keyframes fade-away {
+  to { transform: translateX(40px) rotate(1.5deg); opacity: 0; filter: blur(4px); }
+}
+
 @layer components {
+  .animate-fade-away {
+    animation: fade-away 0.45s ease-in forwards;
+  }
   .wind-line {
     fill: none;
     /* No filter here: a glow on an animating stroke is repainted every frame. */
