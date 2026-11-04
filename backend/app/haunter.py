@@ -91,31 +91,41 @@ async def run(force: bool) -> dict[str, int]:
 async def _run(force: bool) -> dict[str, int]:
     await init_db()
     now = datetime.now(timezone.utc)
-    summary = {"checked": 0, "haunted": 0}
-    bb = BackboardClient()
+    summary = {"checked": 0, "haunted": 0, "failed": 0}
     async with SessionLocal() as session:
-        repos = (await session.scalars(select(Repo).options(selectinload(Repo.user)))).all()
-        log.info("checking %d repos", len(repos))
-        for repo in repos:
-            # Read before anything can fail: after rollback() the ORM object is expired, and
-            # touching its attributes would trigger lazy IO, which async SQLAlchemy forbids.
-            name = repo.full_name
-            summary["checked"] += 1
-            try:
-                haunting = await haunt_repo(repo, bb, now, force)
-                if haunting:
-                    session.add(haunting)
-                    summary["haunted"] += 1
-                    log.info("haunted %s (emailed=%s)", name, haunting.emailed)
-                await session.commit()
-            except Exception as e:
-                # One broken repo (revoked token, deleted repo...) must not stop the others.
-                await session.rollback()
-                if isinstance(e, GitHubError) and e.status_code == 401:
-                    log.warning("skipped %s: GitHub token revoked, the user must log in again", name)
-                else:
-                    log.exception("failed on %s", name)
-    await bb.aclose()
+        repo_ids = (await session.scalars(select(Repo.id).order_by(Repo.id))).all()
+    log.info("checking %d repos", len(repo_ids))
+
+    bb = BackboardClient()
+    try:
+        for repo_id in repo_ids:
+            # One session per repo: a rollback after a failure expires every object in its
+            # session, so with a shared session the *next* repos would break too (async
+            # SQLAlchemy can't lazily reload them). Isolated sessions keep failures contained.
+            async with SessionLocal() as session:
+                repo = await session.scalar(select(Repo).options(selectinload(Repo.user)).where(Repo.id == repo_id))
+                if repo is None:  # banished while the run was in progress
+                    continue
+                name = repo.full_name
+                summary["checked"] += 1
+                try:
+                    haunting = await haunt_repo(repo, bb, now, force)
+                    if haunting:
+                        session.add(haunting)
+                    await session.commit()
+                    if haunting:
+                        summary["haunted"] += 1
+                        log.info("haunted %s (emailed=%s)", name, haunting.emailed)
+                except Exception as e:
+                    # One broken repo (revoked token, deleted repo...) must not stop the others.
+                    await session.rollback()
+                    summary["failed"] += 1
+                    if isinstance(e, GitHubError) and e.status_code == 401:
+                        log.warning("skipped %s: GitHub token revoked, the user must log in again", name)
+                    else:
+                        log.exception("failed on %s", name)
+    finally:
+        await bb.aclose()
     return summary
 
 
